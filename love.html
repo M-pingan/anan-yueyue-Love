@@ -1,0 +1,1754 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>梦幻 3D 相册 · 双生宇宙</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000000;
+            color: #fff;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 开场倒计时帷幕 */
+        #intro-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000000; z-index: 5000;
+            display: flex; justify-content: center; align-items: center;
+            transition: opacity 1.5s ease-in-out;
+        }
+        #countdown-text {
+            font-size: 180px; color: transparent;
+            -webkit-text-stroke: 3px #ffb6c1;
+            text-shadow: 0 0 60px rgba(255,105,180,0.8);
+            font-weight: 100; letter-spacing: 10px;
+        }
+        .heartbeat-anim { animation: heartbeat 1s cubic-bezier(0.4,0,0.2,1) forwards; }
+        @keyframes heartbeat {
+            0% { transform: scale(0.5); opacity: 0; }
+            40% { transform: scale(1.2); opacity: 1; }
+            80% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        /* UI 控制面板 */
+        #menu {
+            position: absolute; bottom: 30px; width: 100%;
+            text-align: center; z-index: 100; pointer-events: none;
+            opacity: 0; transition: opacity 2s 1s;
+        }
+        .instruction {
+            background: rgba(15,0,25,0.7); backdrop-filter: blur(12px);
+            padding: 15px 30px; border-radius: 40px; display: inline-block;
+            border: 1px solid rgba(255,105,180,0.4);
+            box-shadow: 0 0 25px rgba(255,105,180,0.2); pointer-events: auto;
+        }
+        .keys { display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap; }
+        .key-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            padding: 6px 16px; border-radius: 20px; font-size: 13px; color: #ddd;
+            display: flex; align-items: center; gap: 8px; transition: all 0.3s; cursor: pointer;
+        }
+        .key-btn span.num {
+            background: rgba(255,255,255,0.2); color: white;
+            padding: 2px 8px; border-radius: 50%; font-weight: bold; font-size: 12px;
+        }
+        #btn-reveal {
+            background: rgba(255,105,180,0.1); border: 1px solid #ff69b4;
+            box-shadow: 0 0 15px rgba(255,105,180,0.4);
+        }
+        #btn-reveal span.num {
+            background: linear-gradient(135deg, #ff69b4, #8a2be2);
+            box-shadow: 0 0 10px rgba(255,105,180,0.8);
+        }
+        .mouse-hint { margin-top: 12px; font-size: 12px; color: #888; letter-spacing: 1px; transition: all 0.3s; }
+
+        /* 3D 照片卡片 */
+        .element {
+            width: 140px; height: 200px;
+            border-radius: 8px; text-align: center; cursor: pointer;
+            transition: box-shadow 0.4s, border 0.4s, background-color 0.4s;
+            overflow: hidden;
+            opacity: 0; pointer-events: none;
+            will-change: transform, opacity;
+        }
+        /* 宇宙 A：星河粉紫 */
+        .element.universe-A {
+            box-shadow: 0px 0px 15px rgba(255,105,180,0.3);
+            border: 1px solid rgba(255,105,180,0.3);
+            background-color: rgba(10,0,20,0.8);
+        }
+        .element.universe-A:hover {
+            box-shadow: 0px 0px 30px rgba(255,255,255,0.9);
+            border: 1px solid rgba(255,255,255,0.9);
+        }
+        /* 宇宙 B：极光幽绿 */
+        .element.universe-B {
+            box-shadow: 0px 0px 15px rgba(0,191,255,0.3);
+            border: 1px solid rgba(0,191,255,0.3);
+            background-color: rgba(0,10,25,0.8);
+        }
+        .element.universe-B:hover {
+            box-shadow: 0px 0px 30px rgba(0,255,200,0.9);
+            border: 1px solid rgba(0,255,200,0.9);
+        }
+
+        .element img { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; transition: opacity 0.4s, transform 0.6s; pointer-events: none; -webkit-user-drag: none; }
+        .element:hover img { opacity: 1; transform: scale(1.1); }
+
+        #webgl-container, #css3d-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #webgl-container { z-index: 1; }
+        #css3d-container { z-index: 2; }
+
+        /* 事迹档案弹窗 */
+        #detail-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(15px);
+            z-index: 2000; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.4s cubic-bezier(0.4,0,0.2,1);
+        }
+        #detail-modal.active { display: flex; opacity: 1; }
+        .detail-card {
+            display: flex; width: 800px; height: 450px;
+            background: linear-gradient(145deg, rgba(30,10,40,0.95), rgba(10,5,20,0.95));
+            border: 1px solid rgba(255,105,180,0.5);
+            box-shadow: 0 0 50px rgba(255,105,180,0.2), inset 0 0 20px rgba(255,255,255,0.05);
+            border-radius: 20px; overflow: hidden; transform: scale(0.9);
+            transition: transform 0.4s cubic-bezier(0.4,0,0.2,1); position: relative;
+        }
+        #detail-modal.active .detail-card { transform: scale(1); }
+        .detail-img-container { width: 50%; position: relative; overflow: hidden; }
+        .detail-img-container img { width: 100%; height: 100%; object-fit: cover; }
+        .detail-text { width: 50%; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; position: relative; }
+        .detail-title { font-size: 24px; font-weight: 300; color: #fff; margin: 0 0 10px 0; letter-spacing: 2px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        .detail-meta { font-size: 13px; color: #ffb6c1; margin-bottom: 20px; font-family: monospace; }
+        .detail-desc { font-size: 15px; line-height: 1.8; color: #ccc; flex-grow: 1; overflow-y: auto; }
+        .close-btn {
+            background: rgba(255,105,180,0.2); border: 1px solid rgba(255,105,180,0.5);
+            color: #fff; padding: 10px 0; border-radius: 8px; cursor: pointer;
+            transition: all 0.3s; font-size: 14px; letter-spacing: 2px; margin-top: auto; width: 100%;
+        }
+        .close-btn:hover { background: rgba(255,105,180,0.6); box-shadow: 0 0 15px rgba(255,105,180,0.4); }
+        .nav-btn {
+            position: absolute; top: 50%; transform: translateY(-50%); background: transparent; border: none;
+            color: rgba(255,255,255,0.3); font-size: 32px; padding: 10px; cursor: pointer;
+            border-radius: 8px; transition: all 0.3s; z-index: 2010;
+        }
+        .nav-btn:hover { color: #fff; text-shadow: 0 0 20px rgba(255,105,180,0.9); transform: translateY(-50%) scale(1.1); }
+        .left-nav { left: 15px; } .right-nav { right: 15px; }
+
+        /* ZXY Logo */
+        #logo-zxy {
+            position: fixed; top: 40px; left: 50px; font-size: 38px;
+            font-family: 'Georgia', serif; font-style: italic;
+            color: rgba(255,255,255,0.95); letter-spacing: 8px; z-index: 1000;
+            text-shadow: 0 0 20px rgba(255,105,180,0.8), 0 0 10px rgba(255,255,255,0.8);
+            opacity: 0; transition: opacity 2s 1s; pointer-events: none;
+        }
+
+        /* 烟花画布 */
+        #fireworks-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        #countdown-text { z-index: 2; position: relative; }
+        #birthday-greeting {
+            position: absolute; z-index: 3; text-align: center; opacity: 0; transform: scale(0.8);
+            transition: opacity 2s ease-out, transform 3s ease-out; pointer-events: none;
+        }
+        #birthday-greeting.show { opacity: 1; transform: scale(1); }
+        .bday-title { font-size: 80px; font-weight: 200; color: #fff; letter-spacing: 8px; text-shadow: 0 0 40px rgba(255,105,180,1), 0 0 15px #fff; margin: 0; }
+        .bday-sub { font-size: 26px; font-weight: 300; color: #ffb6c1; letter-spacing: 10px; margin-top: 25px; text-shadow: 0 0 20px rgba(255,105,180,0.8); }
+
+        /* 音乐按钮 */
+        #music-btn {
+            position: fixed; top: 30px; right: 40px; width: 40px; height: 40px;
+            background: rgba(255,105,180,0.1); border: 1px solid rgba(255,105,180,0.5);
+            border-radius: 50%; color: #fff; font-size: 18px;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 2000; transition: all 0.3s; opacity: 0.6; backdrop-filter: blur(5px);
+        }
+        #music-btn:hover { background: rgba(255,105,180,0.4); opacity: 1; box-shadow: 0 0 15px rgba(255,105,180,0.8); }
+        .playing { animation: spin 4s linear infinite; opacity: 1 !important; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* ==========================================
+           回忆视频按钮 (宇宙 B)
+           ========================================== */
+        #memories-btn {
+            position: fixed; top: 85px; right: 40px;
+            width: 42px; height: 42px;
+            background: rgba(0,191,255,0.08);
+            border: 1px solid rgba(0,191,255,0.45);
+            border-radius: 50%; color: #fff; font-size: 15px;
+            display: none; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 2000; transition: all 0.35s ease;
+            opacity: 0; backdrop-filter: blur(5px);
+            pointer-events: none;
+        }
+        #memories-btn.visible {
+            display: flex; opacity: 0.55; pointer-events: auto;
+        }
+        #memories-btn:hover {
+            background: rgba(0,191,255,0.35); opacity: 1;
+            box-shadow: 0 0 25px rgba(0,191,255,0.7), 0 0 50px rgba(0,191,255,0.25);
+            transform: scale(1.1);
+        }
+        #memories-btn .pulse-ring {
+            position: absolute; top: -6px; left: -6px; width: 54px; height: 54px;
+            border-radius: 50%; border: 1px solid rgba(0,191,255,0.25);
+            animation: pulseRing 2.5s ease-out infinite;
+            pointer-events: none;
+        }
+        @keyframes pulseRing {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        /* ==========================================
+           视频弹窗
+           ========================================== */
+        #video-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); backdrop-filter: blur(18px);
+            z-index: 3000; display: none; justify-content: center; align-items: center; flex-direction: column;
+            opacity: 0; transition: opacity 0.5s cubic-bezier(0.4,0,0.2,1);
+        }
+        #video-overlay.active { display: flex; opacity: 1; }
+
+        #video-overlay .video-wrapper {
+            position: relative;
+            width: 66vw; max-width: 1200px;
+            border-radius: 18px;
+            padding: 4px;
+            background: linear-gradient(135deg, #00bfff, #8a2be2, #ff69b4, #00bfff, #8a2be2);
+            background-size: 400% 400%;
+            animation: borderShift 4s ease infinite;
+            box-shadow:
+                0 0 30px rgba(0,191,255,0.5),
+                0 0 60px rgba(138,43,226,0.35),
+                0 0 100px rgba(255,105,180,0.25),
+                0 0 180px rgba(0,191,255,0.12),
+                inset 0 0 30px rgba(0,0,0,0.3);
+        }
+        @keyframes borderShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #video-overlay .video-wrapper::before {
+            content: ''; position: absolute; top: -8px; left: -8px; right: -8px; bottom: -8px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, rgba(0,191,255,0.3), rgba(138,43,226,0.3), rgba(255,105,180,0.3), rgba(0,191,255,0.3));
+            background-size: 400% 400%;
+            animation: borderShift 4s ease infinite;
+            z-index: -1;
+            filter: blur(25px);
+            pointer-events: none;
+        }
+
+        #video-overlay video {
+            display: block; width: 100%; height: auto; max-height: 80vh;
+            border-radius: 15px;
+            background: #000;
+            outline: none;
+        }
+
+        #video-overlay .video-title {
+            color: rgba(255,255,255,0.8); font-size: 16px; letter-spacing: 6px;
+            margin-bottom: 18px; font-weight: 300;
+            text-shadow: 0 0 20px rgba(0,191,255,0.6);
+        }
+
+        #video-overlay .video-close {
+            position: absolute; top: -50px; right: 0;
+            background: rgba(0,191,255,0.1); border: 1px solid rgba(0,191,255,0.4);
+            color: #fff; width: 38px; height: 38px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; font-size: 20px; transition: all 0.3s; line-height: 1;
+        }
+        #video-overlay .video-close:hover {
+            background: rgba(0,191,255,0.45);
+            box-shadow: 0 0 25px rgba(0,191,255,0.7);
+            transform: rotate(90deg);
+        }
+
+        /* 视频四角星光点缀 */
+        #video-overlay .corner-spark {
+            position: absolute; width: 14px; height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(0,191,255,0.9), 0 0 30px rgba(138,43,226,0.6);
+            pointer-events: none;
+            animation: sparkPulse 2s ease-in-out infinite;
+        }
+        #video-overlay .corner-spark.tl { top: -7px; left: -7px; animation-delay: 0s; }
+        #video-overlay .corner-spark.tr { top: -7px; right: -7px; animation-delay: 0.5s; }
+        #video-overlay .corner-spark.bl { bottom: -7px; left: -7px; animation-delay: 1s; }
+        #video-overlay .corner-spark.br { bottom: -7px; right: -7px; animation-delay: 1.5s; }
+        @keyframes sparkPulse {
+            0%, 100% { transform: scale(0.6); opacity: 0.4; }
+            50% { transform: scale(1.4); opacity: 1; }
+        }
+
+        /* ==========================================
+           双生宇宙穿梭按钮
+           ========================================== */
+        .portal-btn {
+            position: fixed; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,105,180,0.2);
+            backdrop-filter: blur(10px); color: #fff; padding: 25px 12px;
+            cursor: pointer; z-index: 1000; border-radius: 15px;
+            font-size: 14px; letter-spacing: 4px;
+            writing-mode: vertical-lr;
+            transition: all 0.5s cubic-bezier(0.4,0,0.2,1);
+            opacity: 0; pointer-events: none;
+            box-shadow: 0 0 15px rgba(255,105,180,0.05);
+        }
+        .portal-btn:hover {
+            background: rgba(255,105,180,0.15);
+            border-color: rgba(255,105,180,0.8);
+            box-shadow: 0 0 25px rgba(255,105,180,0.4);
+            color: #ffb6c1; text-shadow: 0 0 10px rgba(255,105,180,0.8);
+            transform: translateY(-50%) scale(1.05);
+        }
+        #portal-left { left: 30px; border-color: rgba(0,191,255,0.2); }
+        #portal-left:hover { border-color: rgba(0,191,255,0.8); box-shadow: 0 0 25px rgba(0,191,255,0.4); color: #00bfff; text-shadow: 0 0 10px rgba(0,191,255,0.8); }
+        #portal-right { right: 30px; }
+
+        /* 穿梭跃迁闪光帷幕 */
+        #warp-flash {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #ffffff; z-index: 4000; opacity: 0; pointer-events: none;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        /* ==========================================
+           移动端横屏适配 (高度 ≤ 600px)
+           ========================================== */
+        @media (max-height: 600px) {
+            /* 3D 照片卡片等比缩小 */
+            .element { width: 100px; height: 145px; }
+
+            /* 底部操控栏 */
+            .instruction { padding: 8px 18px; border-radius: 30px; }
+            .keys { gap: 8px; }
+            .key-btn { padding: 4px 10px; font-size: 11px; border-radius: 16px; }
+            .key-btn span.num { padding: 1px 6px; font-size: 10px; }
+            .mouse-hint { margin-top: 6px; font-size: 10px; }
+
+            /* 穿梭按钮 */
+            .portal-btn { padding: 14px 7px; font-size: 11px; letter-spacing: 2px; border-radius: 10px; }
+            #portal-left { left: 10px; }
+            #portal-right { right: 10px; }
+
+            /* Logo */
+            #logo-zxy { top: 12px; left: 15px; font-size: 24px; letter-spacing: 5px; }
+
+            /* 音乐按钮 */
+            #music-btn { top: 10px; right: 15px; width: 30px; height: 30px; font-size: 14px; }
+
+            /* 回忆按钮 */
+            #memories-btn { top: 50px; right: 15px; width: 30px; height: 30px; font-size: 12px; }
+            #memories-btn .pulse-ring { top: -4px; left: -4px; width: 38px; height: 38px; }
+
+            /* 视频弹窗 */
+            #video-overlay .video-wrapper { width: 85vw; }
+            #video-overlay .video-title { font-size: 13px; letter-spacing: 4px; margin-bottom: 12px; }
+            #video-overlay .video-close { top: -38px; width: 30px; height: 30px; font-size: 16px; }
+
+            /* 开场倒计时 */
+            #countdown-text { font-size: 100px; }
+            .bday-title { font-size: 44px; letter-spacing: 4px; }
+            .bday-sub { font-size: 17px; margin-top: 15px; letter-spacing: 6px; }
+
+            /* 档案弹窗 */
+            .detail-card { width: 600px; height: 320px; border-radius: 14px; }
+            .detail-text { padding: 20px 28px; }
+            .detail-title { font-size: 18px; padding-bottom: 10px; }
+            .detail-meta { font-size: 11px; margin-bottom: 12px; }
+            .detail-desc { font-size: 13px; line-height: 1.6; }
+            .close-btn { padding: 8px 0; font-size: 12px; letter-spacing: 1px; }
+            .nav-btn { font-size: 24px; padding: 6px; }
+        }
+
+        @media (max-height: 400px) {
+            /* 超矮屏幕进一步压缩 */
+            .element { width: 80px; height: 116px; }
+            .detail-card { width: 500px; height: 260px; }
+            .detail-text { padding: 14px 20px; }
+            .detail-title { font-size: 16px; }
+            .detail-desc { font-size: 11px; line-height: 1.4; }
+            .bday-title { font-size: 34px; }
+            .bday-sub { font-size: 14px; }
+            .instruction { padding: 5px 14px; }
+            .key-btn { padding: 3px 8px; font-size: 10px; }
+            .portal-btn { padding: 10px 5px; font-size: 10px; }
+            #logo-zxy { top: 8px; left: 10px; font-size: 20px; }
+            #memories-btn { top: 42px; right: 12px; width: 26px; height: 26px; font-size: 10px; }
+            #memories-btn .pulse-ring { top: -3px; left: -3px; width: 32px; height: 32px; }
+            #video-overlay .video-wrapper { width: 90vw; }
+            #video-overlay .video-title { font-size: 11px; letter-spacing: 3px; }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="bg-music" loop>
+        <source src="程响 - 人间烟火.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="music-btn" onclick="toggleMusic()">🎵</div>
+
+    <!-- 宇宙 B 回忆视频按钮 -->
+    <div id="memories-btn" onclick="openVideo()">
+        <div class="pulse-ring"></div>
+        💫
+    </div>
+
+    <!-- 视频弹窗 -->
+    <div id="video-overlay">
+        <div class="video-title">✦ 我们的回忆 ✦</div>
+        <div class="video-wrapper">
+            <div class="corner-spark tl"></div>
+            <div class="corner-spark tr"></div>
+            <div class="corner-spark bl"></div>
+            <div class="corner-spark br"></div>
+            <div class="video-close" onclick="closeVideo(event)">✕</div>
+            <video id="memory-video" controls playsinline>
+                <source src="video.mp4" type="video/mp4">
+            </video>
+        </div>
+    </div>
+
+    <div id="logo-zxy">ZXY</div>
+
+    <!-- 双生宇宙 -->
+    <div id="warp-flash"></div>
+    <button id="portal-left" class="portal-btn" onclick="switchUniverse('A')">⬅ 返回：星光原乡</button>
+    <button id="portal-right" class="portal-btn" onclick="switchUniverse('B')">穿梭：共同回忆 ➡</button>
+
+    <div id="intro-screen">
+        <canvas id="fireworks-canvas"></canvas>
+        <div id="countdown-text"></div>
+        <div id="birthday-greeting">
+            <h1 class="bday-title">Happy Birthday</h1>
+            <div class="bday-sub">ZXY，愿你的世界永远星光璀璨</div>
+        </div>
+    </div>
+
+    <div id="webgl-container"></div>
+    <div id="css3d-container"></div>
+
+    <div id="menu">
+        <div class="instruction">
+            <div class="keys">
+                <div class="key-btn"><span class="num">1</span> 混沌</div>
+                <div class="key-btn"><span class="num">2</span> 星球</div>
+                <div class="key-btn"><span class="num">3</span> 螺旋</div>
+                <div class="key-btn"><span class="num">4</span> 矩阵</div>
+                <div class="key-btn"><span class="num">5</span> 星海</div>
+                <div class="key-btn" id="btn-reveal"><span class="num">0</span> 唤醒记忆</div>
+            </div>
+            <div class="mouse-hint" id="status-text">当前状态：星系沉睡中 | 切换形态(1-5) | 按 0 唤醒照片</div>
+        </div>
+    </div>
+
+    <div id="detail-modal">
+        <div class="detail-card">
+            <button class="nav-btn left-nav" onclick="prevPhoto(event)">&#10094;</button>
+            <button class="nav-btn right-nav" onclick="nextPhoto(event)">&#10095;</button>
+            <div class="detail-img-container"><img id="detail-img" src="" alt="" crossorigin="anonymous"></div>
+            <div class="detail-text">
+                <h2 class="detail-title">星空纪元·绝密档案</h2>
+                <div class="detail-meta" id="detail-time">记录时间：载入中...</div>
+                <div class="detail-desc" id="detail-desc">正在解密星光背后的故事...</div>
+                <button class="close-btn" onclick="closeDetail()">关闭档案</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
+
+    <script>
+        // === 全局变量与状态机 ===
+        let camera, webglScene, cssScene, webglRenderer, cssRenderer, controls, particleSystem, bgParticleSystem;
+        let isRevealed = false;
+        let currentShapeId = '1';
+        let currentPhotoIndex = 0;
+
+        // 🌟 双生宇宙状态
+        let currentUniverse = 'A';
+        let colorsA = [], colorsB = [];
+        let colorProgress = { t: 0 };
+
+        // 核心配置
+        const photoCount = 94;
+        const TOTAL_LOCAL_IMAGES_A = 94;  // image1/ 图片数量
+        const TOTAL_LOCAL_IMAGES_B = 45;  // image2/ 图片数量
+        const particleCount = 8000;
+        const bgParticleCount = 6000;
+
+        // 流星系统
+        let meteors = [];
+        let meteorShowerMode = false;
+        let nextMeteorTime = 0;
+        let nextShowerTime = Date.now() + 18000;
+        let showerEndTime = 0;
+
+        const objects = [];
+
+        // 双宇宙布局字典
+        const layoutsA = { '1': 'scatter', '2': 'sphere', '3': 'helix', '4': 'grid', '5': 'heart' };
+        const layoutsB = { '1': 'wave', '2': 'tunnel', '3': 'rings', '4': 'pyramid', '5': 'infinity' };
+
+        // 照片目标 (宇宙 A + 宇宙 B)
+        const photoTargets = {
+            scatter: [], sphere: [], helix: [], grid: [], heart: [],
+            wave: [], tunnel: [], rings: [], pyramid: [], infinity: []
+        };
+        const particleTargets = {
+            scatter: new Float32Array(particleCount * 3), sphere: new Float32Array(particleCount * 3),
+            helix: new Float32Array(particleCount * 3), grid: new Float32Array(particleCount * 3), heart: new Float32Array(particleCount * 3),
+            wave: new Float32Array(particleCount * 3), tunnel: new Float32Array(particleCount * 3),
+            rings: new Float32Array(particleCount * 3), pyramid: new Float32Array(particleCount * 3), infinity: new Float32Array(particleCount * 3)
+        };
+        const particleSource = new Float32Array(particleCount * 3);
+        const particleTransition = { t: 0 };
+        let activeParticleTarget = particleTargets.scatter;
+
+        // 🔥 宇宙 A 日志
+        const customLogsA = {
+            0: { time: "2023-03-08", text: "你抱着花站在光里，像把整个春天都提前带到了我面前。那一刻我忽然明白，有些人天生就该被认真喜欢。" },
+            1: { time: "2023-03-08", text: "镜头里的你歪着头笑，连空气都跟着变软了。花束只是礼物，而你才是那天真正让人心动的答案。" },
+            2: { time: "2023-03-15", text: "车里的光影轻轻落在你脸上，连发梢都带着温柔。我总觉得这种随手拍下来的瞬间，最像喜欢本身的样子。" },
+            3: { time: "2023-03-20", text: "你躲进怀抱里时，连周围的风都安静了下来。原来心安并不抽象，它就是你靠近时的温度。" },
+            4: { time: "2023-03-25", text: "洗手台前的倒影把你装进小小的画面里，可喜欢却一下子被放得很大。每次看见这张图，我都会想起那天你低头时的安静。" },
+            5: { time: "2023-04-02", text: "你用手指轻轻碰着唇边，像是在和镜头说悄悄话。明明只是一个简单动作，却让我记了很久很久。" },
+            6: { time: "2023-04-10", text: "黄色毛衣把你衬得像一束发亮的春光，连旧楼和墙角都因此有了故事。你回头的样子，让平常街景都多了心动的注脚。" },
+            7: { time: "2023-04-16", text: "江边的风把头发吹起一点弧度，你站在那里，像一首没有写完的诗。城市很远，水面很静，而你刚好美得恰到好处。" },
+            8: { time: "2023-04-20", text: "你趴在桌边的时候，像是把疲惫和可爱都一起交给了夜色。那一瞬间我只想把时间调慢，让你多停留一会儿。" },
+            9: { time: "2023-04-27", text: "亮粉色的背景很张扬，可你一出现，所有颜色都成了陪衬。喜欢你这件事也是这样，从来不需要别的理由。" },
+            10: { time: "2023-05-05", text: "餐桌边的暖光落在你侧脸上，平凡的一顿饭也被你过成了电影镜头。原来日常最动人的部分，是有人值得被这样悄悄记住。" },
+            11: { time: "2023-05-09", text: "夜色和树影交错成一片流动的背景，而你站在其中，像从夏夜里走出来的一句情诗。风吹过的时候，连心跳都变得有节奏。" },
+            12: { time: "2023-05-12", text: "镜子里的你戴着帽子，像把清冷和柔软都藏在了同一张脸上。简单的一张自拍，却总让我忍不住反复看很多遍。" },
+            13: { time: "2023-05-12", text: "栏杆旁的灯光把夜晚衬得很深，而你安静地站在发光的边缘。那种不说话也很好看的时刻，最容易让人沦陷。" },
+            14: { time: "2023-05-12", text: "同样的夜色，同样的侧脸，却还是能让人再一次心动。你望向远处的时候，好像把所有浪漫都收进了眼睛里。" },
+            15: { time: "2023-05-18", text: "试衣镜前的你裹在白色羽绒服里，像冬天最柔软的一团云。人群很多，可我的视线还是会第一时间落在你身上。" },
+            16: { time: "2023-05-20", text: "光束划过夜空的时候，你正好站在它们下面。盛大的场景当然好看，但比灯光更耀眼的，还是你被照亮的侧脸。" },
+            17: { time: "2023-05-20", text: "毛绒帽把你裹得很小一只，像把整个世界的可爱都借来了一点。看到这张照片时，总会想起我那天偷偷弯起的嘴角。" },
+            18: { time: "2023-05-20", text: "舞台灯光在远处盛大地绽放，而你站在人群前，安静得像一颗独立发光的星星。热闹属于现场，心动只属于这一眼。" },
+            19: { time: "2023-05-28", text: "夕阳落在水边，你被金色的光轻轻抱住。原来黄昏最温柔的部分，不是晚霞，而是晚霞里刚好有你。" },
+            20: { time: "2023-06-01", text: "你戴着毛绒帽从竹影里看向镜头，像童话里突然出现的小熊公主。连绿色的背景都被衬得格外安静，只为了让你更好看一点。" },
+            21: { time: "2023-06-08", text: "蓝裙子和云层把这张照片拍得像梦境一样干净。你抬头望天的时候，我总觉得你不只是站在海边，而是站在故事里。" },
+            22: { time: "2023-06-08", text: "黑白滤镜让风景变得克制，可你坐在那里的样子仍然很动人。有些温柔根本不需要颜色，也会自己发光。" },
+            23: { time: "2023-06-12", text: "水面把傍晚的光映得很碎，你回眸的那一下却特别清晰。好像所有被风吹散的情绪，都在这张图里重新聚拢了。" },
+            24: { time: "2023-06-12", text: "围巾和晚霞把你包裹成一个很柔软的黄昏。明明只是很普通的水边合影，却总让我想起那天心里悄悄升起的安静幸福。" },
+            25: { time: "2023-06-18", text: "仰拍的角度带着一点俏皮和倔强，你皱着嘴的样子也依旧可爱。原来喜欢一个人之后，连她的小表情都会变得珍贵。" },
+            26: { time: "2023-06-23", text: "夜色把你身上的浅色外套衬得更亮了一些，你抬头的样子像在等一场只属于自己的星光。那一刻我很想把愿望借给你。" },
+            27: { time: "2023-06-23", text: "古城的灯火铺开在你身后，而你回头时，整座夜景都像在为你让路。再漂亮的风景，也比不上被你点亮的那一秒。" },
+            28: { time: "2023-07-01", text: "你抬手去接光，像是在和夏天认真打招呼。那种不经意的明媚，很容易就把人心里的阴天全赶走。" },
+            29: { time: "2023-07-01", text: "同一条街、同一束光，你只是站在那里，画面就有了温度。很多美好并不复杂，不过是镜头里有一个刚好发亮的你。" },
+            30: { time: "2023-07-05", text: "古街的石板路被灯火照得很暖，而你从画面里走出来，像替这个夜晚补上了最温柔的一笔。这样的你，太适合被记住。" },
+            31: { time: "2023-07-05", text: "你靠在栏边，夜色在身后慢慢展开。人间烟火那么热闹，我却只想把这份安静地漂亮单独珍藏下来。" },
+            32: { time: "2023-07-12", text: "水边的风把帽檐和羽绒服都吹得很柔软，你仰头望着远处，像把心事都交给了湖面。连沉默都因此变得很好看。" },
+            33: { time: "2023-07-12", text: "同样是水边，同样是白色外套，可你每一次抬头都像新的心动。喜欢大概就是这样，明明看过很多遍，还是会反复沦陷。" },
+            34: { time: "2023-07-20", text: "霓虹灯和玻璃把街头装点得很热闹，可你举起手机的样子比这些招牌更有吸引力。城市的光很多，我却总能一眼认出你的那种亮。" },
+            35: { time: "2023-07-21", text: "店门前的你像被晚风轻轻推停在了镜头里。只是一个抬头的瞬间，就足够让这条普通街道变得值得反复回想。" },
+            36: { time: "2023-07-21", text: "你站在店门口，眼神安静又坚定，像在等某个故事正式开始。后来我再看这张照片，还是会觉得你比招牌更耀眼。" },
+            37: { time: "2023-07-28", text: "街道被拉成长长的透视线，而你站在正中间，像这座小城最温柔的主角。镜头知道我在看什么，所以它也把你留得格外清楚。" },
+            38: { time: "2023-07-28", text: "同一条街上，你换了一个更安静的姿势，连风都像放慢了速度。原来不需要太多表情，单是站在那里就已经足够好看。" },
+            39: { time: "2023-08-01", text: "你低头看手机的样子很日常，可正是这种不经修饰的瞬间最容易让人动心。喜欢原来不是轰烈，而是觉得连平凡都值得珍藏。" },
+            40: { time: "2023-08-05", text: "红色针织衫把你衬得明亮又灵动，像把秋天最鲜艳的一抹先穿在了身上。你一转身，连街景都跟着鲜活了起来。" },
+            41: { time: "2023-08-08", text: "店铺门口的标语很有趣，可我真正想看的只有站在下面的你。照片会记录场景，而我的记忆只会偏爱你的表情。" },
+            42: { time: "2023-08-12", text: "海边的暮色把你的轮廓描得很柔和，你仰头喝水的样子有一点随性，也有一点自由。这样的瞬间总让我想起夏天真正的味道。" },
+            43: { time: "2023-08-16", text: "金色的墙面把夕阳的温度全留在了身后，你站在那里，像被秋天偷偷提前喜欢上的人。连影子都显得格外温柔。" },
+            44: { time: "2023-08-20", text: "街角的粉色建筑和你身上的白色外套很配，像偶然撞见的一小段法式电影。你站在那里，世界也跟着变得细致了起来。" },
+            45: { time: "2023-08-20", text: "橱窗边的你像是在和黄昏交换心事，红色内搭让整张照片都暖了几分。很多时候，漂亮并不是盛装，而是你刚好站在光里。" },
+            46: { time: "2023-08-24", text: "石板路和老街背景像是为你准备好的布景，而你抬手的动作替画面添了灵气。看到这张照片时，我总会想到‘刚刚好’三个字。" },
+            47: { time: "2023-08-30", text: "坐在栏边的你把傍晚衬得格外柔和，红色上衣像一颗正在发热的小太阳。原来秋天也会因为一个人而显得明亮。" },
+            48: { time: "2023-09-02", text: "你回头看镜头的时候，连背景里平凡的建筑都突然有了故事。很多喜欢都是从这种瞬间开始的，没有征兆，却很深刻。" },
+            49: { time: "2023-09-02", text: "同一条街道、同样的光线，你只是微微偏头，就让整张照片有了柔软的情绪。镜头很诚实，它总能拍出我眼里最动人的你。" },
+            50: { time: "2023-09-05", text: "双手捧脸的动作有一点孩子气，却可爱得让人舍不得移开视线。喜欢你以后，我开始理解为什么‘心软’会是一种常态。" },
+            51: { time: "2023-09-05", text: "你把手遮在嘴边，像是要把秘密轻轻藏起来。可你的好看从来藏不住，它总会很自然地从每一张照片里跑出来。" },
+            52: { time: "2023-09-05", text: "抬手敬礼的样子有一点俏皮，有一点认真，也有一点独属于你的灵气。很多照片只是记录，而这张更像在收藏你的性格。" },
+            53: { time: "2023-09-08", text: "你转身坐在街道中央，像把身后的整条路都走成了风景。这个背影很轻，却让回忆一下子有了重量。" },
+            54: { time: "2023-09-12", text: "你举起手的样子像在接住天空的颜色，傍晚的草地也因此显得格外温柔。原来青春最好的模样，就是这样自在又明亮。" },
+            55: { time: "2023-09-16", text: "灯光很低，桌面很安静，而你侧着脸坐在那里，像一段舍不得说完的夜晚。这样的画面总让人想慢一点，再慢一点。" },
+            56: { time: "2023-09-20", text: "你在风里抬起手，脸上带着一点倔强一点可爱。秋天的天色总容易显得冷，可你总能把它过得很有温度。" },
+            57: { time: "2023-09-25", text: "巨大的拱门和水面把你衬得像走进艺术馆里的小小主角。画面有种克制的高级感，而你是里面最灵动的一笔。" },
+            58: { time: "2023-10-01", text: "夜路把背景拉得很深，你转头的那一下却把视线全都留住了。灯再暖，也比不过你被光擦亮的侧脸。" },
+            59: { time: "2023-10-03", text: "你举着话筒的样子认真又投入，像把小小的快乐都唱给了这一晚听。好看的不只是照片，还有你沉浸其中的神情。" },
+            60: { time: "2023-10-08", text: "街角转身的一瞬间，像电影里恰好回头的女主角。明明只是轻轻一瞥，却让人想把这一页停留得再久一点。" },
+            61: { time: "2023-10-12", text: "坐在栏边的你望着天色，像在和傍晚安静对话。风景给了这张图层次，而你的存在让它真正有了灵魂。" },
+            62: { time: "2023-10-12", text: "同样的地方、不同的动作，你把平凡场景演绎出了另一种情绪。每一次回头看这些照片，都会觉得你很适合被时间偏爱。" },
+            63: { time: "2023-10-18", text: "暖黄的灯串在你身后亮起来，把眼神也衬得更柔一点。明明是静静看着镜头，却像隔着画面轻轻撞了我一下心口。" },
+            64: { time: "2023-10-22", text: "你站在长街中央，像给这条路添了一句温柔的注解。建筑很复古，风景很好，而最值得被记住的还是你的神情。" },
+            65: { time: "2023-10-22", text: "同一条街上，你换了个更安静的站姿，整张照片也跟着慢了下来。原来有些好看并不张扬，只是越看越舍不得忘。" },
+            66: { time: "2023-10-24", text: "抬手的动作像是在和天光打招呼，你站在拱门下，连商店门口都多了几分电影感。很多浪漫，就是这样被你顺手创造出来的。" },
+            67: { time: "2023-10-24", text: "长街尽头的你被镜头收得很完整，像是风景里最重要的那个焦点。每次看到这种画面，我都会觉得世界待你很温柔。" },
+            68: { time: "2023-10-28", text: "路灯边的你轻轻侧身，像被秋风停留住的一个好看瞬间。连路边的城市轮廓都在提醒我，这一天很值得记住。" },
+            69: { time: "2023-11-02", text: "红色上衣、舒展的动作、微微发亮的天空，你把普通街角拍成了青春海报。那种明媚，不需要解释，看到就会心情变好。" },
+            70: { time: "2023-11-10", text: "桥边的夜风把人吹得很清醒，而你趴在栏边时，整座城市都好像变得温柔了。这样的夜景会过去，但这份心动不会。" },
+            71: { time: "2023-11-15", text: "金色楼阁在身后热烈发光，而你站在前面，依旧是最先被看到的那一个。原来好看的人，真的会让所有背景都甘心当陪衬。" },
+            72: { time: "2023-11-20", text: "车厢里的你和身边的人一起入镜，画面里有很真实的生活感。比起精致的摆拍，我更喜欢这种带着温度的普通时刻。" },
+            73: { time: "2023-11-28", text: "少数民族服饰把你衬得像从画里走出来的人，鲜艳又端庄。不同风格的你总能让人眼前一亮，好像每一次都能重新认识你。" },
+            74: { time: "2023-12-03", text: "午后的草地和你轻轻前倾的动作，让这张照片带着一点顽皮的自由。阳光很足，而你刚好把这份明朗接得很完整。" },
+            75: { time: "2023-12-09", text: "教室里趴着小憩的侧影，安静得让人不忍心惊动。爱意很多时候并不轰烈，它只是看见你累了时，会下意识想替你挡住一点光。" },
+            76: { time: "2023-12-15", text: "同样的华服造型又多了一分端丽，像把古典和灵气都穿在了身上。镜头只是记录下来，而真正打动人的，是你站在那里时的从容。" },
+            77: { time: "2023-12-20", text: "粉色礼裙和向日葵让这张照片像童话的结尾页，温柔得几乎发亮。你回头的那一下，像把所有浪漫都轻轻收拢进怀里。" },
+            78: { time: "2023-12-28", text: "黑色长裙站在湖边，有一种很安静的高级感。你不需要多余的动作，只是站在那里，就足够让风景变得深情。" },
+            79: { time: "2024-01-02", text: "海风吹起浅色裙摆，你站在很远的蓝里，像一个被夏天悄悄保存起来的梦。这样的画面，总会让人想起自由两个字。" },
+            80: { time: "2024-01-08", text: "毛绒帽把脸衬得更小，连眼神都显得格外软。冬天当然冷，可看到这张照片的时候，心里会先暖起来。" },
+            81: { time: "2024-01-14", text: "花束和侧脸一起被暖光照亮，像替这个瞬间加了一层很轻的滤镜。你看向远处的时候，总有一种被故事偏爱的美。" },
+            82: { time: "2024-01-20", text: "夜色里的近景把你的眼睛拍得很清楚，像把所有情绪都悄悄放大了。明明没有说话，却让人很想认真听你心里的声音。" },
+            83: { time: "2024-01-26", text: "树影下面的你伸手比耶，像把轻松和漂亮都一起装进了画面。真正让人喜欢的，从来不只是外表，还有这种很自然的松弛感。" },
+            84: { time: "2024-02-03", text: "地铁车厢里的你低头看手机，像把喧闹世界隔开了一小层安静。这样的日常并不盛大，却格外适合被珍藏。" },
+            85: { time: "2024-02-10", text: "白裙子和城市天桥的线条碰在一起，意外地清爽又轻盈。你像是从繁忙街区里独自开出的一朵花，让人一眼就能看见。" },
+            86: { time: "2024-02-10", text: "站在扶梯边回头的你，像给都市背景添了一句柔软注解。钢筋水泥本来冷冷的，可你一出现，画面就有了温度。" },
+            87: { time: "2024-02-18", text: "江岸和天色都有一点灰蓝，而白裙子的你像是专门负责把这份清冷变成浪漫。远方的城市线条很模糊，你却漂亮得很明确。" },
+            88: { time: "2024-02-18", text: "同样是天桥的几何背景，你抬头的样子让整张图显得利落又明亮。原来城市感和温柔感，也可以在一个人身上同时成立。" },
+            89: { time: "2024-02-24", text: "白色栏杆旁的你像是刚从风里走出来，裙摆和姿态都很轻。很多好看的照片都需要构图，而这一张更像是你自己在发光。" },
+            90: { time: "2024-03-01", text: "海边的风把头发吹散一点，你抬手整理的动作很自然，也很动人。城市天际线在远处，而我的目光只会停在你这里。" },
+            91: { time: "2024-03-08", text: "旗袍和花艺把画面衬得格外典雅，你站在那里，像旧时光里最温柔的一页。那种从容又明艳的美，真的很难让人忘记。" },
+            92: { time: "2024-03-16", text: "帽檐、墨镜和黄色卫衣让你多了一点酷酷的俏皮感。你总有这种能力，不同风格都能穿出只属于自己的灵气。" },
+            93: { time: "2024-03-24", text: "草地上的阳光很直接，你伸手去接住它的时候，整张照片都亮了起来。愿这样明朗的你，永远都被世界温柔照顾着。" }
+        };
+
+        // 🔥 宇宙 B 日志 (共同回忆)
+        const customLogsB = {
+            0: { time: "2024-01-03", text: "镜头里我们靠得很近，像是把整个冬天都缩进了一件羽绒服里。你低头的那一秒，我忽然觉得被偏爱原来真的有形状。" },
+            1: { time: "2024-01-06", text: "那张拍立得把我们的青涩也一起洗了出来。你躲在我身边笑，我就知道这一天以后，一切平凡都会慢慢发光。" },
+            2: { time: "2024-01-12", text: "夕阳把海面铺成一条金色的路，我们站在路的尽头，看光一点点落下去。那时我想，能陪你一起等黄昏，就是很浪漫的本事。" },
+            3: { time: "2024-01-12", text: "远远看着你站在海边，连风都舍不得打扰。那片安静的水岸记得，我们曾把喜欢说给晚霞听。" },
+            4: { time: "2024-01-18", text: "你抬眼望向我的时候，周围的喧闹忽然全都退场了。照片没有声音，可我一看到它，就会想起那天心跳靠近的节奏。" },
+            5: { time: "2024-01-18", text: "我们抱在一起的时候，连冬夜都不再锋利。你缩进我怀里的一瞬间，好像全世界都默认我们该这样相爱。" },
+            6: { time: "2024-01-18", text: "这一张里的我们都有一点拘谨，又都有一点舍不得松手。原来喜欢一个人，是连拥抱都会带着珍惜。" },
+            7: { time: "2024-01-20", text: "你在前面挡着光，我在后面悄悄看你。那天风有点凉，可你回头的样子，足够让我记很久很久。" },
+            8: { time: "2024-02-02", text: "穿上同款毛衣站在窗边，像把日常也过成了节日。你望向我的眼神很安静，却比任何一句情话都更让我心动。" },
+            9: { time: "2024-02-14", text: "戒指在灯下闪着很轻的光，可我真正想收藏的，是你把手伸出来时那一点认真和温柔。爱被看见的瞬间，连空气都变得郑重。" },
+            10: { time: "2024-02-14", text: "两只手靠在一起的时候，我突然意识到我们真的在把未来一点点戴在身上。金属会发亮，可比它更亮的，是我们彼此笃定的目光。" },
+            11: { time: "2024-02-16", text: "那个有些模糊的吻，反而像极了心动本身。来不及准备，也来不及防备，只知道靠近你时，整个世界都柔软了。" },
+            12: { time: "2024-03-02", text: "你回头看镜头的样子像电影里的人。城市的街道很长，可只要你在前面，我就愿意把每一段路都走成故事。" },
+            13: { time: "2024-03-08", text: "这张合照里我们像两个偷偷逃课来见面的小孩，挤在小小的画面里认真开心。原来幸福也可以这么简单，就是你在，我也在。" },
+            14: { time: "2024-03-10", text: "镜子把我们装得很小，却把喜欢放得很大。明明只是随手一拍，我却总会在这张照片前停很久，因为它像极了我们安静相爱的样子。" },
+            15: { time: "2024-03-16", text: "你裹在毛绒帽子里，像冬天留给我的一颗小月亮。靠着你拍照的时候，我总会忘记天冷，只记得你真的很可爱。" },
+            16: { time: "2024-03-16", text: "夜色里的古街灯火温柔，我们一前一后走着，影子都像在并肩。有人间烟火做背景，喜欢你这件事就显得格外真实。" },
+            17: { time: "2024-03-16", text: "车里的光线昏昏沉沉，可你靠近的时候，我还是一下就清醒了。原来再普通的夜晚，也会因为和你同框而值得反复怀念。" },
+            18: { time: "2024-03-20", text: "白色外套衬得我们像刚从一场雪里走出来。你站在我身边的时候，我总会莫名安心，像终于找到自己愿意停靠的地方。" },
+            19: { time: "2024-03-22", text: "你用手比出心形的时候，我就在心里悄悄补上另一半。后来才发现，其实那天最完整的爱意，已经被我们一起框进照片里了。" },
+            20: { time: "2024-03-28", text: "街道很安静，你把头轻轻靠过来，我连呼吸都放轻了一点。原来真正的亲密，不需要太多动作，靠近本身就是答案。" },
+            21: { time: "2024-03-28", text: "落日落在我们背后，把地砖都照得暖融融的。那天我们并肩站着，像是在替未来排练一场很长很长的同行。" },
+            22: { time: "2024-04-01", text: "新年的数字在身后亮起，我们站在镜头前认真摆姿势。很多愿望我都没说出口，因为最大的那个，已经站在我旁边了。" },
+            23: { time: "2024-04-06", text: "隔着窗拍下的这一幕像偷偷保存的一段电影。哪怕只是很普通地一起出门，也足够让我在往后的日子里一再回放。" },
+            24: { time: "2024-04-01", text: "同款毛衣、同样的手势、同一份默契，这张照片像是我们给生活写的小小签名。你一笑，连最平常的一天都像节日。" },
+            25: { time: "2024-04-12", text: "画面歪歪的，我们却靠得刚刚好。喜欢你以后，我开始觉得连不完美的瞬间都很珍贵，因为那里面有最真实的我们。" },
+            26: { time: "2024-04-20", text: "湖边风很轻，我们背对镜头站着，像把话都说给水面听。爱有时候并不热烈，它更像这种并肩沉默却一点也不空白的时刻。" },
+            27: { time: "2024-04-23", text: "车厢里有一点拥挤，可你在身边，我就觉得哪里都能变成安心的角落。很多回忆不是因为场景特别，而是因为你也在里面。" },
+            28: { time: "2024-04-30", text: "你戴着毛绒帽子看向我，我看着你，像看一场只属于我的温柔降临。那一瞬间我很想把时间拉长，好让心动多停留一会儿。" },
+            29: { time: "2024-05-03", text: "夕阳从你身后漫出来，把你整个人都镶了一层金边。原来光会偏爱人，而我会偏爱被光照着的你。" },
+            30: { time: "2024-05-03", text: "你嘟起嘴靠过来，阳光刚好落在脸侧。那一秒我只觉得，连春天最明亮的颜色，都不如你站在我身边时可爱。" },
+            31: { time: "2024-05-05", text: "树荫下面的我们看起来安安静静，却把喜欢写得很满。你望向镜头，我望向未来，而未来里刚好一直有你。" },
+            32: { time: "2024-05-10", text: "站在街边的背影像一段还没说完的对白。你轻轻挽住我的那一刻，整座城市都像忽然懂了什么叫做相配。" },
+            33: { time: "2024-05-10", text: "这一张把我们和人间烟火一起拍了进去。很喜欢这种感觉，明明只是过马路、看街景，却像在共同生活的预告片里。" },
+            34: { time: "2024-05-12", text: "蓝色天空下面，我们肩并肩对着镜头比耶。青春有很多定义，但在我这里，它就是和你一起把平凡日子过得明亮又大胆。" },
+            35: { time: "2024-05-12", text: "你靠着我，眼神干净得像初夏的风。每次看这张照片我都会想，原来爱意最好的样子，就是这样不费力地待在彼此身边。" },
+            36: { time: "2024-06-01", text: "毕业服穿在身上，连青涩都显得郑重了起来。谢谢你陪我把青春走到这一页，于是连告别都多了一层温柔的意义。" },
+            37: { time: "2024-06-01", text: "学士帽斜斜地戴着，我们故意摆出有点拽的表情。可我心里其实很软，因为知道在人生的新章节开头，你还站在我旁边。" },
+            38: { time: "2024-06-08", text: "夜色把海边铺成深蓝色，我们站在风里，像两颗终于找到轨道的星星。灯火很远，可你在身边，已经足够让我觉得浪漫。" },
+            39: { time: "2024-06-15", text: "逆着光拍下来的笑脸有点任性，也有点自由。和你一起看太阳的时候，我总觉得所有匆忙都值得慢下来。" },
+            40: { time: "2024-06-18", text: "手里拿着拍立得和门票，像把快乐握成了可以收藏的证据。后来翻到这张图时，我还是会想起那天心里满满当当的满足。" },
+            41: { time: "2024-06-22", text: "你低头看相机，我侧过身看你。人群、街道、绿树都退成了背景，那一刻最清晰的，只剩下我们一起记录彼此的认真。" },
+            42: { time: "2024-06-25", text: "黑色卫衣让我们看起来像同一场夜里走出来的人。你把手放在我肩上的时候，我就知道，有些依赖已经悄悄长成了习惯。" },
+            43: { time: "2024-06-25", text: "我们面对面站着，谁都没有笑得太夸张，可眼神里全是藏不住的在意。爱并不总是轰轰烈烈，它也会像这一刻一样，安静却坚定。" },
+            44: { time: "2024-06-30", text: "展厅的灯把影子拉得很长，我们牵着手从一幅画走向另一幅画。原来最动人的作品不是墙上的那些，而是我们一起走过的这一段。" }
+        };
+
+        let activeCustomLogs = customLogsA;
+
+        const defaultDeeds = [
+            "我们在未知的星系边缘留下了这张影像，星光被引力扭曲，记忆却永恒清晰。",
+            "第四次星际跃迁后的合影。这是我们在银河悬臂外侧捕捉到的唯一一抹亮色。",
+            "在阿尔法星云的中心，我们见证了恒星的坍缩与新生，这是一张带有宇宙温度的照片。",
+            "岁月在光年之外流转，这张被数字化的记忆切片，曾伴随我们在黑暗真空中漂流了数个世纪。"
+        ];
+
+        // ==========================================
+        // 3D 物理流星实体类
+        // ==========================================
+        class Meteor {
+            constructor(scene) {
+                this.scene = scene;
+                this.start = new THREE.Vector3(
+                    random(-4000, 10000), random(4000, 6000), random(-8000, 8000)
+                );
+                this.pos = this.start.clone();
+                this.dir = new THREE.Vector3(-1.6, -1.0, -0.4).normalize();
+                this.speed = random(90, 160);
+                this.length = random(1200, 2800);
+                this.active = true;
+
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const colorArray = new Float32Array(6);
+                const headColor = new THREE.Color(1, 1, 1);
+                const tailColor = new THREE.Color();
+                const rand = Math.random();
+                if (rand < 0.4) { tailColor.setHSL(0.9, 1.0, 0.5); }
+                else if (rand < 0.8) { tailColor.setHSL(0.55, 1.0, 0.5); }
+                else { tailColor.setHSL(0.1, 1.0, 0.5); }
+                colorArray[0] = headColor.r; colorArray[1] = headColor.g; colorArray[2] = headColor.b;
+                colorArray[3] = tailColor.r; colorArray[4] = tailColor.g; colorArray[5] = tailColor.b;
+                geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+
+                const material = new THREE.LineBasicMaterial({
+                    vertexColors: true, transparent: true, opacity: random(0.9, 1.0),
+                    blending: THREE.AdditiveBlending, depthWrite: false, linewidth: 2
+                });
+                this.line = new THREE.Line(geometry, material);
+                this.scene.add(this.line);
+                this.updateLineGeometry();
+            }
+            update() {
+                if (!this.active) return;
+                this.pos.addScaledVector(this.dir, this.speed);
+                this.updateLineGeometry();
+                if (this.pos.y < -5000 || this.pos.x < -10000 || this.pos.z < -10000) { this.destroy(); }
+            }
+            updateLineGeometry() {
+                const positions = this.line.geometry.attributes.position.array;
+                positions[0] = this.pos.x; positions[1] = this.pos.y; positions[2] = this.pos.z;
+                positions[3] = this.pos.x - this.dir.x * this.length;
+                positions[4] = this.pos.y - this.dir.y * this.length;
+                positions[5] = this.pos.z - this.dir.z * this.length;
+                this.line.geometry.attributes.position.needsUpdate = true;
+            }
+            destroy() {
+                this.active = false;
+                this.scene.remove(this.line);
+                this.line.geometry.dispose();
+                this.line.material.dispose();
+            }
+        }
+
+        // ==========================================
+        // 2D 烟花系统
+        // ==========================================
+        const fwCanvas = document.getElementById('fireworks-canvas');
+        const fwCtx = fwCanvas.getContext('2d');
+        let fwWidth, fwHeight;
+        let fireworks = [], fwParticles = [], fwAnimationId = null, isFinale = false;
+
+        function resizeFwCanvas() {
+            fwWidth = window.innerWidth; fwHeight = window.innerHeight;
+            fwCanvas.width = fwWidth; fwCanvas.height = fwHeight;
+        }
+        window.addEventListener('resize', resizeFwCanvas);
+        resizeFwCanvas();
+
+        function random(min, max) { return Math.random() * (max - min) + min; }
+
+        class Firework {
+            constructor(startX, isGrand = false) {
+                this.x = startX || random(fwWidth * 0.1, fwWidth * 0.9);
+                this.y = fwHeight;
+                this.targetY = random(fwHeight * 0.1, fwHeight * 0.35);
+                this.speed = random(14, 22);
+                this.angle = random(-Math.PI * 0.55, -Math.PI * 0.45);
+                this.vx = Math.cos(this.angle) * this.speed;
+                this.vy = Math.sin(this.angle) * this.speed;
+                this.color = Math.random() > 0.3 ? `hsl(${random(290,340)}, 100%, 65%)` : `hsl(${random(30,60)}, 100%, 70%)`;
+                this.isGrand = isGrand;
+                this.trail = [];
+            }
+            update() {
+                this.trail.push({ x: this.x, y: this.y });
+                if (this.trail.length > 5) this.trail.shift();
+                this.x += this.vx; this.y += this.vy; this.vy += 0.25;
+                if (this.vy >= 0 || this.y <= this.targetY) { this.explode(); return false; }
+                return true;
+            }
+            draw() {
+                fwCtx.beginPath();
+                fwCtx.moveTo(this.trail[0]?.x || this.x, this.trail[0]?.y || this.y);
+                fwCtx.lineTo(this.x, this.y);
+                fwCtx.strokeStyle = '#fff'; fwCtx.lineWidth = 3; fwCtx.stroke();
+            }
+            explode() {
+                const pCount = this.isGrand ? 250 : 100;
+                if (this.isGrand) { fwCtx.fillStyle = 'rgba(255,255,255,0.4)'; fwCtx.fillRect(0, 0, fwWidth, fwHeight); }
+                for (let i = 0; i < pCount; i++) {
+                    fwParticles.push(new FWParticle(this.x, this.y, this.color, this.isGrand));
+                }
+            }
+        }
+
+        class FWParticle {
+            constructor(x, y, color, isGrand) {
+                this.x = x; this.y = y;
+                const angle = random(0, Math.PI * 2);
+                const speed = isGrand ? random(2, 22) : random(1, 14);
+                this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
+                this.friction = 0.94; this.gravity = 0.12; this.alpha = 1;
+                this.decay = random(0.01, 0.025);
+                this.color = Math.random() < 0.1 ? '#ffffff' : color;
+                this.size = random(1.5, 3.5);
+            }
+            update() {
+                this.vx *= this.friction; this.vy *= this.friction; this.vy += this.gravity;
+                this.x += this.vx; this.y += this.vy; this.alpha -= this.decay;
+                return this.alpha > 0;
+            }
+            draw() {
+                fwCtx.globalAlpha = this.alpha;
+                fwCtx.beginPath();
+                fwCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                fwCtx.fillStyle = this.color; fwCtx.fill();
+                fwCtx.globalAlpha = 1;
+            }
+        }
+
+        function animateFireworks() {
+            fwCtx.globalCompositeOperation = 'destination-out';
+            fwCtx.fillStyle = 'rgba(0, 0, 0, 0.25)'; fwCtx.fillRect(0, 0, fwWidth, fwHeight);
+            fwCtx.globalCompositeOperation = 'lighter';
+            if (!isFinale && Math.random() < 0.08) fireworks.push(new Firework());
+            fireworks = fireworks.filter(fw => { fw.draw(); return fw.update(); });
+            fwParticles = fwParticles.filter(p => { p.draw(); return p.update(); });
+            fwAnimationId = requestAnimationFrame(animateFireworks);
+        }
+
+        // ==========================================
+        // 开场倒计时
+        // ==========================================
+        startIntroSequence();
+
+        function startIntroSequence() {
+            const textEl = document.getElementById('countdown-text');
+            const greetingEl = document.getElementById('birthday-greeting');
+            const introScreen = document.getElementById('intro-screen');
+            const sequence = ['3', '2', '1'];
+            let step = 0;
+
+            function nextTick() {
+                if (step < sequence.length) {
+                    textEl.innerText = sequence[step];
+                    textEl.className = '';
+                    void textEl.offsetWidth;
+                    textEl.className = 'heartbeat-anim';
+                    step++;
+                    setTimeout(nextTick, 1000);
+                } else {
+                    textEl.style.display = 'none';
+                    animateFireworks();
+                    setTimeout(() => { greetingEl.classList.add('show'); }, 1500);
+                    setTimeout(() => {
+                        isFinale = true;
+                        fireworks.push(new Firework(fwWidth * 0.2, true));
+                        fireworks.push(new Firework(fwWidth * 0.4, true));
+                        fireworks.push(new Firework(fwWidth * 0.6, true));
+                        fireworks.push(new Firework(fwWidth * 0.8, true));
+                    }, 5500);
+                    setTimeout(() => {
+                        introScreen.style.opacity = 0;
+                        setTimeout(() => {
+                            introScreen.style.display = 'none';
+                            cancelAnimationFrame(fwAnimationId);
+                            document.getElementById('menu').style.opacity = 1;
+                            document.getElementById('logo-zxy').style.opacity = 1;
+                            document.getElementById('portal-right').style.opacity = 1;
+                            document.getElementById('portal-right').style.pointerEvents = 'auto';
+                            init3DScene();
+                        }, 1500);
+                    }, 7500);
+                }
+            }
+            nextTick();
+        }
+
+        // ==========================================
+        // 3D 核心渲染
+        // ==========================================
+        function init3DScene() {
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 30000);
+            camera.position.z = Math.max(4500, photoCount * 20);
+
+            webglScene = new THREE.Scene();
+            webglScene.fog = new THREE.FogExp2(0x050010, 0.00015);
+            cssScene = new THREE.Scene();
+
+            createBgParticles();
+            createParticles();
+            createPhotos();
+
+            webglRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            webglRenderer.setPixelRatio(window.devicePixelRatio);
+            webglRenderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('webgl-container').appendChild(webglRenderer.domElement);
+
+            cssRenderer = new THREE.CSS3DRenderer();
+            cssRenderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('css3d-container').appendChild(cssRenderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, cssRenderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 500;
+            controls.maxDistance = 15000;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.6;
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', onKeyDown);
+
+            // 触屏设备：底部按钮可点击切换形态 / 唤醒照片
+            document.querySelector('.keys').addEventListener('click', function (e) {
+                const btn = e.target.closest('.key-btn');
+                if (!btn) return;
+
+                if (btn.id === 'btn-reveal') {
+                    TWEEN.removeAll();
+                    if (!isRevealed) { executeAwakening(); }
+                    else { executeConcealing(); }
+                } else {
+                    const numSpan = btn.querySelector('.num');
+                    if (!numSpan) return;
+                    const key = numSpan.textContent.trim();
+                    if (['1', '2', '3', '4', '5'].includes(key)) {
+                        TWEEN.removeAll();
+                        currentShapeId = key;
+                        const layoutMap = currentUniverse === 'A' ? layoutsA : layoutsB;
+                        const layoutName = layoutMap[key];
+                        transformParticles(particleTargets[layoutName], 2000);
+                        if (isRevealed) {
+                            transformPhotos(photoTargets[layoutName], 2000, TWEEN.Easing.Exponential.InOut);
+                        }
+                    }
+                }
+            });
+
+            // 移动端：触摸轻点照片 → 打开档案（OrbitControls 会拦截 click，需手动检测 tap）
+            let touchStartAt = 0, touchDidMove = false;
+            cssRenderer.domElement.addEventListener('touchstart', () => {
+                touchStartAt = Date.now();
+                touchDidMove = false;
+            }, { passive: true });
+            cssRenderer.domElement.addEventListener('touchmove', () => {
+                touchDidMove = true;
+            }, { passive: true });
+            cssRenderer.domElement.addEventListener('touchend', (e) => {
+                if (touchDidMove || Date.now() - touchStartAt > 300) return;
+                const touch = e.changedTouches[0];
+                const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                const photoEl = el?.closest('.element');
+                if (photoEl && photoEl.style.pointerEvents !== 'none') {
+                    const idx = objects.findIndex(obj => obj.element === photoEl);
+                    if (idx >= 0) openDetail(idx);
+                }
+            });
+
+            animate();
+        }
+
+        function createParticles() {
+            const geometry = new THREE.BufferGeometry();
+            const color = new THREE.Color();
+
+            for (let i = 0; i < particleCount; i++) {
+                let i3 = i * 3;
+
+                // ========== 宇宙 A 粒子坐标 ==========
+                particleTargets.scatter[i3] = (Math.random() - 0.5) * 12000;
+                particleTargets.scatter[i3 + 1] = (Math.random() - 0.5) * 12000;
+                particleTargets.scatter[i3 + 2] = (Math.random() - 0.5) * 12000;
+
+                const phi = Math.acos(-1 + (2 * i) / particleCount);
+                const theta = Math.sqrt(particleCount * Math.PI) * phi;
+                const rSphere = 1400 + (Math.random() - 0.5) * 300;
+                particleTargets.sphere[i3] = rSphere * Math.sin(phi) * Math.cos(theta);
+                particleTargets.sphere[i3 + 1] = rSphere * Math.sin(phi) * Math.sin(theta);
+                particleTargets.sphere[i3 + 2] = rSphere * Math.cos(phi);
+
+                const strand = (i % 2) * Math.PI;
+                const thetaHelix = i * 0.01 + strand;
+                const rHelix = 1500 + (Math.random() - 0.5) * 800;
+                particleTargets.helix[i3] = rHelix * Math.cos(thetaHelix);
+                particleTargets.helix[i3 + 1] = -(i * 0.6) + 2500;
+                particleTargets.helix[i3 + 2] = rHelix * Math.sin(thetaHelix);
+
+                const cols = 25, rows = 20, depth = 16;
+                const col = i % cols, row = Math.floor(i / cols) % rows, dep = Math.floor(i / (cols * rows));
+                particleTargets.grid[i3] = (col * 180) - (cols * 180 / 2) + (Math.random() - 0.5) * 100;
+                particleTargets.grid[i3 + 1] = -(row * 180) + (rows * 180 / 2) + (Math.random() - 0.5) * 100;
+                particleTargets.grid[i3 + 2] = (dep * 350) - (depth * 350 / 2);
+
+                const t = Math.random() * Math.PI * 2;
+                const rScale = Math.pow(Math.random(), 0.5) * 0.9 + 0.1;
+                const hx = 16 * Math.pow(Math.sin(t), 3);
+                const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                particleTargets.heart[i3] = hx * 75 * rScale + (Math.random() - 0.5) * 200;
+                particleTargets.heart[i3 + 1] = hy * 75 * rScale + 200 + (Math.random() - 0.5) * 200;
+                particleTargets.heart[i3 + 2] = (Math.random() - 0.5) * 1800;
+
+                // ========== 宇宙 B 粒子坐标 ==========
+                const waveCol = i % 80;
+                const waveRow = Math.floor(i / 80);
+                particleTargets.wave[i3] = (waveCol - 40) * 180 + (Math.random() - 0.5) * 50;
+                particleTargets.wave[i3 + 2] = (waveRow - 50) * 180 + (Math.random() - 0.5) * 50;
+                particleTargets.wave[i3 + 1] = Math.sin(waveCol * 0.15) * Math.cos(waveRow * 0.15) * 600 + (Math.random() - 0.5) * 200;
+
+                const tTheta = (i / particleCount) * Math.PI * 16;
+                const tRadius = 1500 + (Math.random() - 0.5) * 400;
+                particleTargets.tunnel[i3] = tRadius * Math.cos(tTheta);
+                particleTargets.tunnel[i3 + 1] = (i * 1.5) - 6000;
+                particleTargets.tunnel[i3 + 2] = tRadius * Math.sin(tTheta);
+
+                if (i % 2 === 0) {
+                    const rTheta = (i / particleCount) * Math.PI * 4;
+                    const rr = 1600 + (Math.random() - 0.5) * 150;
+                    particleTargets.rings[i3] = rr * Math.cos(rTheta);
+                    particleTargets.rings[i3 + 1] = (Math.random() - 0.5) * 100;
+                    particleTargets.rings[i3 + 2] = rr * Math.sin(rTheta);
+                } else {
+                    const rTheta = (i / particleCount) * Math.PI * 4;
+                    const rr = 1600 + (Math.random() - 0.5) * 150;
+                    particleTargets.rings[i3] = rr * Math.cos(rTheta);
+                    particleTargets.rings[i3 + 1] = rr * Math.sin(rTheta);
+                    particleTargets.rings[i3 + 2] = (Math.random() - 0.5) * 100;
+                }
+
+                const pLayer = Math.floor(i / (particleCount / 6));
+                const pRadius = (6 - pLayer) * 450;
+                const pTheta = Math.random() * Math.PI * 2;
+                particleTargets.pyramid[i3] = pRadius * Math.cos(pTheta) + (Math.random() - 0.5) * 200;
+                particleTargets.pyramid[i3 + 1] = pLayer * 500 - 1500 + (Math.random() - 0.5) * 100;
+                particleTargets.pyramid[i3 + 2] = pRadius * Math.sin(pTheta) + (Math.random() - 0.5) * 200;
+
+                const infT = (i / particleCount) * Math.PI * 4;
+                const infDenom = 1 + Math.sin(infT) * Math.sin(infT);
+                const infScale = 2200;
+                particleTargets.infinity[i3] = (infScale * Math.cos(infT)) / infDenom + (Math.random() - 0.5) * 150;
+                particleTargets.infinity[i3 + 1] = (infScale * Math.sin(infT) * Math.cos(infT)) / infDenom + (Math.random() - 0.5) * 150;
+                particleTargets.infinity[i3 + 2] = Math.sin(infT * 2) * 500 + (Math.random() - 0.5) * 250;
+
+                // ========== 双宇宙颜色 ==========
+                const rand = Math.random();
+                let hA;
+                if (rand < 0.3) hA = 0.55 + Math.random() * 0.1;
+                else if (rand < 0.6) hA = 0.75 + Math.random() * 0.1;
+                else if (rand < 0.85) hA = 0.9 + Math.random() * 0.1;
+                else hA = 0.1 + Math.random() * 0.05;
+                color.setHSL(hA, 1.0, 0.7 + Math.random() * 0.3);
+                colorsA.push(color.r, color.g, color.b);
+
+                let hB;
+                if (rand < 0.35) hB = 0.45 + Math.random() * 0.08;
+                else if (rand < 0.65) hB = 0.53 + Math.random() * 0.07;
+                else if (rand < 0.85) hB = 0.32 + Math.random() * 0.08;
+                else hB = 0.12 + Math.random() * 0.05;
+                color.setHSL(hB, 1.0, 0.65 + Math.random() * 0.35);
+                colorsB.push(color.r, color.g, color.b);
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(particleTargets.scatter), 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colorsA, 3));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const grd = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            grd.addColorStop(0, 'rgba(255,255,255,1)');
+            grd.addColorStop(0.3, 'rgba(255,255,255,0.9)');
+            grd.addColorStop(0.7, 'rgba(255,255,255,0.3)');
+            grd.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grd; ctx.fillRect(0, 0, 32, 32);
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const material = new THREE.PointsMaterial({ size: 42, map: texture, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+            particleSystem = new THREE.Points(geometry, material);
+            webglScene.add(particleSystem);
+        }
+
+        function createBgParticles() {
+            const bgGeometry = new THREE.BufferGeometry();
+            const bgPositions = new Float32Array(bgParticleCount * 3);
+            const bgColors = [];
+            const color = new THREE.Color();
+
+            for (let i = 0; i < bgParticleCount; i++) {
+                bgPositions[i * 3] = (Math.random() - 0.5) * 25000;
+                bgPositions[i * 3 + 1] = (Math.random() - 0.5) * 25000;
+                bgPositions[i * 3 + 2] = (Math.random() - 0.5) * 25000;
+                color.setHSL(0.55 + Math.random() * 0.1, 0.9, 0.6 + Math.random() * 0.4);
+                bgColors.push(color.r, color.g, color.b);
+            }
+            bgGeometry.setAttribute('position', new THREE.BufferAttribute(bgPositions, 3));
+            bgGeometry.setAttribute('color', new THREE.Float32BufferAttribute(bgColors, 3));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 16; canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            const grd = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+            grd.addColorStop(0, 'rgba(255,255,255,1)');
+            grd.addColorStop(0.4, 'rgba(0,191,255,0.9)');
+            grd.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grd; ctx.fillRect(0, 0, 16, 16);
+            const bgTexture = new THREE.CanvasTexture(canvas);
+
+            const bgMaterial = new THREE.PointsMaterial({ size: 35, map: bgTexture, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+            bgParticleSystem = new THREE.Points(bgGeometry, bgMaterial);
+            webglScene.add(bgParticleSystem);
+        }
+
+        // 👇👇👇 【本地图片配置】 👇👇👇
+        const PLACEHOLDER = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="150" height="200" viewBox="0 0 150 200"><rect width="100%" height="100%" fill="%231a0033"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="11" fill="%23ff69b4">★ 加载中</text></svg>';
+        const THUMB_W = 150, THUMB_H = 200;
+
+        // Canvas 缩略图生成器 —— 支持任意文件夹 + 扩展名自动回退
+        function loadThumbnail(imgEl, index, folder) {
+            const exts = ['jpg', 'png'];
+            let attempt = 0;
+            const loader = new Image();
+            loader.crossOrigin = 'anonymous';
+            loader.onload = function () {
+                const c = document.createElement('canvas');
+                c.width = THUMB_W; c.height = THUMB_H;
+                const ctx = c.getContext('2d');
+                const s = Math.max(THUMB_W / loader.width, THUMB_H / loader.height);
+                const sw = THUMB_W / s, sh = THUMB_H / s;
+                const sx = (loader.width - sw) / 2, sy = (loader.height - sh) / 2;
+                ctx.drawImage(loader, sx, sy, sw, sh, 0, 0, THUMB_W, THUMB_H);
+                imgEl.src = c.toDataURL('image/jpeg', 0.75);
+                imgEl.dataset.highres = loader.src;
+            };
+            loader.onerror = function () {
+                attempt++;
+                if (attempt < exts.length) {
+                    loader.src = `${folder}/${index}.${exts[attempt]}`;
+                }
+            };
+            loader.src = `${folder}/${index}.jpg`;
+        }
+
+        function createPhotos() {
+            const vector = new THREE.Vector3();
+
+            // 宇宙 A 参数
+            const adaptiveSphereRadius = Math.max(1200, Math.sqrt(photoCount) * 110);
+            const adaptiveHelixSpacing = Math.max(15, 6000 / photoCount);
+            const matrixSide = Math.ceil(Math.cbrt(photoCount));
+            const spacingX = 350, spacingY = 400, spacingZ = 600;
+            const adaptiveHeartScale = Math.max(65, Math.sqrt(photoCount) * 6);
+
+            // 宇宙 B 参数
+            const bWaveCols = 15;
+            const bWaveRows = Math.ceil(photoCount / bWaveCols);
+            const bPyramidLayers = 5;
+            const bPyramidCountPerLayer = photoCount / bPyramidLayers;
+
+            for (let i = 0; i < photoCount; i++) {
+                const element = document.createElement('div');
+                element.className = 'element universe-A';
+                const img = document.createElement('img');
+
+                // 初始加载宇宙 A 图片 (image1/)
+                const indexA = (i % TOTAL_LOCAL_IMAGES_A) + 1;
+                img.src = PLACEHOLDER;
+                loadThumbnail(img, indexA, 'image1');
+
+                img.crossOrigin = "anonymous";
+                img.draggable = false;
+                element.appendChild(img);
+                element.onclick = (e) => { e.stopPropagation(); openDetail(i); };
+
+                const object = new THREE.CSS3DObject(element);
+                cssScene.add(object);
+                objects.push(object);
+
+                // ========== 宇宙 A 照片目标 ==========
+                const tScatter = new THREE.Object3D();
+                tScatter.position.set((Math.random() - 0.5) * 8000, (Math.random() - 0.5) * 8000, (Math.random() - 0.5) * 8000);
+                tScatter.rotation.set(Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI);
+                photoTargets.scatter.push(tScatter);
+
+                const tSphere = new THREE.Object3D();
+                const phi = Math.acos(-1 + (2 * i) / photoCount);
+                const theta = Math.sqrt(photoCount * Math.PI) * phi;
+                tSphere.position.setFromSphericalCoords(adaptiveSphereRadius, phi, theta);
+                vector.copy(tSphere.position).multiplyScalar(2);
+                tSphere.lookAt(vector);
+                photoTargets.sphere.push(tSphere);
+
+                const tHelix = new THREE.Object3D();
+                const strand = (i % 2) * Math.PI;
+                const thetaHelix = i * 0.15 + strand;
+                const yHelix = -(i * adaptiveHelixSpacing) + (photoCount * adaptiveHelixSpacing / 2);
+                tHelix.position.setFromCylindricalCoords(1500, thetaHelix, yHelix);
+                vector.set(tHelix.position.x * 2, tHelix.position.y, tHelix.position.z * 2);
+                tHelix.lookAt(vector);
+                photoTargets.helix.push(tHelix);
+
+                const tGrid = new THREE.Object3D();
+                const col = i % matrixSide;
+                const row = Math.floor(i / matrixSide) % matrixSide;
+                const dep = Math.floor(i / (matrixSide * matrixSide));
+                tGrid.position.set(
+                    (col * spacingX) - (matrixSide * spacingX / 2) + (spacingX / 2),
+                    -(row * spacingY) + (matrixSide * spacingY / 2) - (spacingY / 2),
+                    (dep * spacingZ) - ((Math.ceil(photoCount / (matrixSide * matrixSide)) * spacingZ) / 2)
+                );
+                photoTargets.grid.push(tGrid);
+
+                const tHeart = new THREE.Object3D();
+                const ht = Math.random() * Math.PI * 2;
+                const hrScale = 0.4 + Math.random() * 0.6;
+                const hx = 16 * Math.pow(Math.sin(ht), 3);
+                const hy = 13 * Math.cos(ht) - 5 * Math.cos(2 * ht) - 2 * Math.cos(3 * ht) - Math.cos(4 * ht);
+                tHeart.position.set(
+                    hx * adaptiveHeartScale * hrScale + random(-100, 100),
+                    hy * adaptiveHeartScale * hrScale + 200 + random(-100, 100),
+                    random(-600, 600)
+                );
+                vector.set(0, 200, 2000);
+                tHeart.lookAt(vector);
+                photoTargets.heart.push(tHeart);
+
+                // ========== 宇宙 B 照片目标 ==========
+                const tWave = new THREE.Object3D();
+                const wCol = i % bWaveCols;
+                const wRow = Math.floor(i / bWaveCols);
+                const wx = (wCol - (bWaveCols / 2)) * 250;
+                const wz = (wRow - (bWaveRows / 2)) * 250;
+                const wy = Math.sin(wCol * 0.5) * Math.cos(wRow * 0.5) * 400;
+                tWave.position.set(wx, wy, wz);
+                vector.set(wx, wy + 2000, wz - 500);
+                tWave.lookAt(vector);
+                photoTargets.wave.push(tWave);
+
+                const tTunnel = new THREE.Object3D();
+                const tuTheta = (i / photoCount) * Math.PI * 4;
+                const tuRadius = 1300;
+                const tuY = (i * 24) - (photoCount * 12);
+                tTunnel.position.set(tuRadius * Math.cos(tuTheta), tuY, tuRadius * Math.sin(tuTheta));
+                vector.set(0, tuY, 0);
+                tTunnel.lookAt(vector);
+                photoTargets.tunnel.push(tTunnel);
+
+                const tRings = new THREE.Object3D();
+                if (i % 2 === 0) {
+                    const rTh = (i / (photoCount / 2)) * Math.PI * 2;
+                    tRings.position.set(1500 * Math.cos(rTh), 0, 1500 * Math.sin(rTh));
+                    vector.set(0, 0, 0); tRings.lookAt(vector);
+                } else {
+                    const rTh = (i / (photoCount / 2)) * Math.PI * 2;
+                    tRings.position.set(1500 * Math.cos(rTh), 1500 * Math.sin(rTh), 0);
+                    vector.set(0, 0, 0); tRings.lookAt(vector);
+                }
+                photoTargets.rings.push(tRings);
+
+                const tPyramid = new THREE.Object3D();
+                const pyLayer = Math.floor(i / bPyramidCountPerLayer);
+                const pyIndex = i % bPyramidCountPerLayer;
+                const pyRadius = (bPyramidLayers - pyLayer) * 400 + 100;
+                const pyTheta = (pyIndex / bPyramidCountPerLayer) * Math.PI * 2;
+                const pyH = pyLayer * 400 - 600;
+                tPyramid.position.set(pyRadius * Math.cos(pyTheta), pyH, pyRadius * Math.sin(pyTheta));
+                vector.set(0, pyH + 300, 0);
+                tPyramid.lookAt(vector);
+                photoTargets.pyramid.push(tPyramid);
+
+                const tInfinity = new THREE.Object3D();
+                const infT = (i / photoCount) * Math.PI * 2;
+                const infDenom = 1 + Math.sin(infT) * Math.sin(infT);
+                const infScale = 1800;
+                tInfinity.position.set(
+                    (infScale * Math.cos(infT)) / infDenom,
+                    (infScale * Math.sin(infT) * Math.cos(infT)) / infDenom,
+                    Math.sin(infT * 2) * 400
+                );
+                vector.set(0, 0, 0);
+                tInfinity.lookAt(vector);
+                photoTargets.infinity.push(tInfinity);
+            }
+        }
+
+        // ==========================================
+        // 键盘交互
+        // ==========================================
+        function onKeyDown(event) {
+            const key = event.key;
+            if (['1', '2', '3', '4', '5', '0'].includes(key)) { TWEEN.removeAll(); }
+
+            if (['1', '2', '3', '4', '5'].includes(key)) {
+                currentShapeId = key;
+                const layoutMap = (currentUniverse === 'A') ? layoutsA : layoutsB;
+                const layoutName = layoutMap[key];
+                transformParticles(particleTargets[layoutName], 2000);
+                if (isRevealed) {
+                    transformPhotos(photoTargets[layoutName], 2000, TWEEN.Easing.Exponential.InOut);
+                }
+            }
+            if (key === '0') {
+                if (!isRevealed) { executeAwakening(); }
+                else { executeConcealing(); }
+            }
+        }
+
+        // ==========================================
+        // 🌟 超空间穿梭：双宇宙跃迁核心
+        // ==========================================
+        function switchUniverse(dest) {
+            if (currentUniverse === dest) return;
+
+            const flash = document.getElementById('warp-flash');
+            const leftPortal = document.getElementById('portal-left');
+            const rightPortal = document.getElementById('portal-right');
+
+            leftPortal.style.pointerEvents = 'none';
+            rightPortal.style.pointerEvents = 'none';
+
+            // 1. 闪光帷幕
+            flash.style.opacity = 1;
+
+            // 2. 相机高速旋转
+            controls.autoRotateSpeed = 22;
+            new TWEEN.Tween(camera.position)
+                .to({ x: 0, y: 0, z: 120 }, 600)
+                .easing(TWEEN.Easing.Cubic.In)
+                .start();
+
+            // 3. 粒子爆破
+            new TWEEN.Tween(particleSystem.scale)
+                .to({ x: 3, y: 3, z: 3 }, 500)
+                .easing(TWEEN.Easing.Cubic.In)
+                .start();
+
+            // 4. 时空中转（550ms 后重组）
+            setTimeout(() => {
+                currentUniverse = dest;
+                isRevealed = false;
+                currentShapeId = '1';
+
+                // 雾效
+                if (dest === 'B') {
+                    webglScene.fog.color.setHex(0x000d1a);
+                    activeCustomLogs = customLogsB;
+
+                    // 切换图片源 → image2/
+                    objects.forEach((obj, idx) => {
+                        const img = obj.element.querySelector('img');
+                        const indexB = (idx % TOTAL_LOCAL_IMAGES_B) + 1;
+                        img.src = PLACEHOLDER;
+                        loadThumbnail(img, indexB, 'image2');
+                        obj.element.classList.remove('universe-A');
+                        obj.element.classList.add('universe-B');
+                    });
+
+                    rightPortal.style.opacity = 0;
+                    // 显示回忆按钮
+                    const memBtn = document.getElementById('memories-btn');
+                    memBtn.classList.add('visible');
+                    setTimeout(() => {
+                        leftPortal.style.opacity = 1;
+                        leftPortal.style.pointerEvents = 'auto';
+                    }, 500);
+                } else {
+                    webglScene.fog.color.setHex(0x050010);
+                    activeCustomLogs = customLogsA;
+
+                    // 切换图片源 → image1/
+                    objects.forEach((obj, idx) => {
+                        const img = obj.element.querySelector('img');
+                        const indexA = (idx % TOTAL_LOCAL_IMAGES_A) + 1;
+                        img.src = PLACEHOLDER;
+                        loadThumbnail(img, indexA, 'image1');
+                        obj.element.classList.remove('universe-B');
+                        obj.element.classList.add('universe-A');
+                    });
+
+                    leftPortal.style.opacity = 0;
+                    // 隐藏回忆按钮
+                    document.getElementById('memories-btn').classList.remove('visible');
+                    setTimeout(() => {
+                        rightPortal.style.opacity = 1;
+                        rightPortal.style.pointerEvents = 'auto';
+                    }, 500);
+                }
+
+                // 5. 隐藏所有照片
+                objects.forEach((obj) => {
+                    obj.element.style.opacity = 0;
+                    obj.element.style.pointerEvents = 'none';
+                    obj.scale.set(0.01, 0.01, 0.01);
+                    obj.position.set((Math.random() - 0.5) * 8000, (Math.random() - 0.5) * 8000, (Math.random() - 0.5) * 8000);
+                });
+
+                // 6. 更新菜单标签
+                updateMenuLabels();
+
+                // 7. 粒子颜色渐变
+                const colorTargetT = dest === 'B' ? 1 : 0;
+                new TWEEN.Tween(colorProgress)
+                    .to({ t: colorTargetT }, 1500)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .onUpdate(() => {
+                        const posColor = particleSystem.geometry.attributes.color.array;
+                        for (let i = 0; i < particleCount * 3; i++) {
+                            posColor[i] = colorsA[i] + (colorsB[i] - colorsA[i]) * colorProgress.t;
+                        }
+                        particleSystem.geometry.attributes.color.needsUpdate = true;
+                    })
+                    .start();
+
+                // 8. 粒子形态归位
+                particleSystem.scale.set(0.1, 0.1, 0.1);
+                const startLayout = (dest === 'A') ? 'scatter' : 'wave';
+                transformParticles(particleTargets[startLayout], 1500);
+
+                new TWEEN.Tween(particleSystem.scale)
+                    .to({ x: 1, y: 1, z: 1 }, 1500)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+
+                // 9. 闪光消散
+                setTimeout(() => {
+                    flash.style.opacity = 0;
+
+                    new TWEEN.Tween(camera.position)
+                        .to({ x: 0, y: 0, z: Math.max(4500, photoCount * 20) }, 1500)
+                        .easing(TWEEN.Easing.Cubic.Out)
+                        .start();
+
+                    new TWEEN.Tween(controls)
+                        .to({ autoRotateSpeed: 0.6 }, 1500)
+                        .easing(TWEEN.Easing.Cubic.Out)
+                        .start();
+                }, 400);
+
+            }, 550);
+        }
+
+        function updateMenuLabels() {
+            const labels = (currentUniverse === 'A')
+                ? ["混沌", "星球", "螺旋", "矩阵", "星海"]
+                : ["潮汐", "隧道", "双环", "棱锥", "无限"];
+
+            const keyBtns = document.querySelectorAll('.key-btn:not(#btn-reveal)');
+            keyBtns.forEach((btn, idx) => {
+                const numSpan = btn.querySelector('.num');
+                const num = numSpan ? numSpan.outerHTML : `<span class="num">${idx + 1}</span>`;
+                btn.innerHTML = `${num} ${labels[idx]}`;
+            });
+
+            const revealText = (currentUniverse === 'A') ? "唤醒记忆" : "唤醒回忆";
+            document.getElementById('btn-reveal').innerHTML = `<span class="num">0</span> ${revealText}`;
+            document.getElementById('status-text').innerText = (currentUniverse === 'A')
+                ? "当前状态：星系沉睡中 | 切换形态(1-5) | 按 0 唤醒照片"
+                : "当前状态：回忆星河静谧中 | 切换形态(1-5) | 按 0 唤醒共同回忆";
+        }
+
+        // ==========================================
+        // 照片唤醒 / 隐藏
+        // ==========================================
+        function executeAwakening() {
+            isRevealed = true;
+            const layoutMap = (currentUniverse === 'A') ? layoutsA : layoutsB;
+            const layoutName = layoutMap[currentShapeId];
+            const duration = 3000;
+
+            const stateMessage = (currentUniverse === 'A') ? "照片已唤醒" : "共同回忆已开启";
+            document.getElementById('status-text').innerText = `当前状态：${stateMessage} | 鼠标悬浮发光 | 按 0 隐藏`;
+            document.getElementById('btn-reveal').innerHTML = '<span class="num">0</span> 隐藏记忆';
+
+            objects.forEach((obj, i) => {
+                const elem = obj.element;
+                const target = photoTargets[layoutName][i];
+
+                elem.style.pointerEvents = 'auto';
+                const cssState = { opacity: 0 };
+                new TWEEN.Tween(cssState).to({ opacity: 0.8 }, duration * 0.8)
+                    .onUpdate(() => { elem.style.opacity = cssState.opacity; }).start();
+
+                if (currentUniverse === 'A') {
+                    if (layoutName === 'scatter') {
+                        obj.position.set(0, 0, 0); obj.scale.set(0.01, 0.01, 0.01);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Cubic.Out, Math.random() * 1000); pulseParticles(1.5, duration);
+                    } else if (layoutName === 'sphere') {
+                        obj.position.set(0, -3000, 0); obj.scale.set(0.01, 0.01, 0.01);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Elastic.Out, i * 15); pulseParticles(1.4, duration);
+                    } else if (layoutName === 'helix') {
+                        obj.position.set(0, target.position.y, 0); obj.scale.set(0.1, 0.1, 0.1);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Back.Out, i * 20);
+                        new TWEEN.Tween(particleSystem.scale).to({ y: 1.6, x: 1.2, z: 1.2 }, duration).easing(TWEEN.Easing.Cubic.InOut).start();
+                    } else if (layoutName === 'grid') {
+                        obj.position.set(target.position.x, target.position.y + 4000, target.position.z); obj.scale.set(1, 1, 1);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Bounce.Out, Math.random() * 1500); pulseParticles(1.3, duration);
+                    } else if (layoutName === 'heart') {
+                        obj.position.set(target.position.x * 6, target.position.y * 6, target.position.z * 6 + 3000); obj.scale.set(0.01, 0.01, 0.01);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Exponential.Out, Math.random() * 1000);
+                        new TWEEN.Tween(particleSystem.scale).to({ x: 1.5, y: 1.5, z: 1.5 }, 600).easing(TWEEN.Easing.Quadratic.Out)
+                            .onComplete(() => { new TWEEN.Tween(particleSystem.scale).to({ x: 1.15, y: 1.15, z: 1.15 }, 1200).easing(TWEEN.Easing.Cubic.InOut).start(); })
+                            .start();
+                    }
+                } else {
+                    if (layoutName === 'wave') {
+                        obj.position.set(target.position.x, target.position.y + 3000, target.position.z); obj.scale.set(0.1, 0.1, 0.1);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Cubic.Out, i * 8); pulseParticles(1.3, duration);
+                    } else if (layoutName === 'tunnel') {
+                        obj.position.set(0, target.position.y, 0); obj.scale.set(0.01, 0.01, 0.01);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Exponential.Out, i * 12); pulseParticles(1.4, duration);
+                    } else if (layoutName === 'rings') {
+                        obj.position.set(0, 0, 0); obj.scale.set(0.01, 0.01, 0.01);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Elastic.Out, Math.random() * 1200); pulseParticles(1.3, duration);
+                    } else if (layoutName === 'pyramid') {
+                        obj.position.set(target.position.x, -2000, target.position.z); obj.scale.set(0.1, 0.1, 0.1);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Back.Out, i * 15); pulseParticles(1.35, duration);
+                    } else if (layoutName === 'infinity') {
+                        obj.position.set(target.position.x * 5, target.position.y * 5, target.position.z * 5); obj.scale.set(0.01, 0.01, 0.01);
+                        tweenObj(obj, target, duration, TWEEN.Easing.Exponential.Out, Math.random() * 1000);
+                        new TWEEN.Tween(particleSystem.scale).to({ x: 1.4, y: 1.4, z: 1.4 }, 600).easing(TWEEN.Easing.Quadratic.Out)
+                            .onComplete(() => { new TWEEN.Tween(particleSystem.scale).to({ x: 1.1, y: 1.1, z: 1.1 }, 1200).easing(TWEEN.Easing.Cubic.InOut).start(); })
+                            .start();
+                    }
+                }
+            });
+        }
+
+        function executeConcealing() {
+            isRevealed = false;
+            const duration = 2000;
+
+            const revealText = (currentUniverse === 'A') ? "唤醒记忆" : "唤醒回忆";
+            document.getElementById('status-text').innerText = (currentUniverse === 'A')
+                ? "当前状态：星系沉睡中 | 切换形态(1-5) | 按 0 唤醒照片"
+                : "当前状态：回忆星河静谧中 | 切换形态(1-5) | 按 0 唤醒共同回忆";
+            document.getElementById('btn-reveal').innerHTML = `<span class="num">0</span> ${revealText}`;
+
+            objects.forEach((obj) => {
+                const elem = obj.element;
+                elem.style.pointerEvents = 'none';
+                const cssState = { opacity: parseFloat(elem.style.opacity) || 0.8 };
+                new TWEEN.Tween(cssState).to({ opacity: 0 }, duration * 0.8)
+                    .onUpdate(() => { elem.style.opacity = cssState.opacity; }).start();
+                new TWEEN.Tween(obj.scale).to({ x: 0.01, y: 0.01, z: 0.01 }, duration).easing(TWEEN.Easing.Cubic.In).start();
+            });
+
+            new TWEEN.Tween(particleSystem.scale).to({ x: 1, y: 1, z: 1 }, duration).easing(TWEEN.Easing.Cubic.InOut).start();
+        }
+
+        function tweenObj(obj, target, duration, easing, delay) {
+            new TWEEN.Tween(obj.position).to({ x: target.position.x, y: target.position.y, z: target.position.z }, duration).easing(easing).delay(delay).start();
+            new TWEEN.Tween(obj.rotation).to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, duration).easing(easing).delay(delay).start();
+            new TWEEN.Tween(obj.scale).to({ x: 1, y: 1, z: 1 }, duration).easing(easing).delay(delay).start();
+        }
+
+        function pulseParticles(scaleTarget, duration) {
+            new TWEEN.Tween(particleSystem.scale).to({ x: scaleTarget, y: scaleTarget, z: scaleTarget }, duration).easing(TWEEN.Easing.Cubic.Out).start();
+        }
+
+        function transformPhotos(targetsArray, duration, easing = TWEEN.Easing.Exponential.InOut) {
+            for (let i = 0; i < objects.length; i++) {
+                const obj = objects[i];
+                const target = targetsArray[i];
+                new TWEEN.Tween(obj.position).to({ x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * duration + duration).easing(easing).start();
+                new TWEEN.Tween(obj.rotation).to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * duration + duration).easing(easing).start();
+            }
+            new TWEEN.Tween(camera.position).to({ x: 0, y: 0, z: (targetsArray === photoTargets.heart || targetsArray === photoTargets.infinity ? Math.max(5000, photoCount * 25) : Math.max(4500, photoCount * 20)) }, duration * 1.5).easing(TWEEN.Easing.Cubic.InOut).start();
+        }
+
+        function transformParticles(targetArray, duration) {
+            particleSource.set(particleSystem.geometry.attributes.position.array);
+            activeParticleTarget = targetArray;
+            particleTransition.t = 0;
+
+            new TWEEN.Tween(particleTransition).to({ t: 1 }, duration * 1.2).easing(TWEEN.Easing.Exponential.InOut)
+                .onUpdate(() => {
+                    const pos = particleSystem.geometry.attributes.position.array;
+                    const t = particleTransition.t;
+                    for (let i = 0; i < particleCount * 3; i++) {
+                        pos[i] = particleSource[i] + (activeParticleTarget[i] - particleSource[i]) * t;
+                    }
+                    particleSystem.geometry.attributes.position.needsUpdate = true;
+                }).start();
+        }
+
+        function openDetail(index) {
+            currentPhotoIndex = index;
+            const imgEl = objects[index].element.querySelector('img');
+
+            // 优先已加载高清路径；未就绪则按当前宇宙索引回退
+            let highres = imgEl.dataset.highres;
+            if (!highres) {
+                const folder = currentUniverse === 'A' ? 'image1' : 'image2';
+                const total = currentUniverse === 'A' ? TOTAL_LOCAL_IMAGES_A : TOTAL_LOCAL_IMAGES_B;
+                const idx = (index % total) + 1;
+                highres = `${folder}/${idx}.jpg`;
+                const probe = new Image();
+                probe.onerror = function () {
+                    if (this.src.endsWith('.jpg')) this.src = `${folder}/${idx}.png`;
+                };
+                probe.src = highres;
+            }
+            document.getElementById('detail-img').src = highres;
+
+            const totalLogs = currentUniverse === 'A' ? TOTAL_LOCAL_IMAGES_A : TOTAL_LOCAL_IMAGES_B;
+            const logData = activeCustomLogs[index % totalLogs];
+            let displayTime = logData?.time || `${2020 + (index % 5)}-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`;
+            let displayText = logData?.text || defaultDeeds[index % defaultDeeds.length];
+
+            const totalImages = currentUniverse === 'A' ? TOTAL_LOCAL_IMAGES_A : TOTAL_LOCAL_IMAGES_B;
+            document.getElementById('detail-time').innerText = `档案解密：${displayTime} | 记忆坐标: [ ${(index % totalImages) + 1} / ${totalImages} ]`;
+            document.getElementById('detail-desc').innerHTML = `
+                <p style="color: #fff; font-size: 15px; font-weight: 300; line-height: 1.8;">${displayText}</p>
+                <p style="margin-top: 30px; color: #888; font-size: 13px;">—— 我们将这一刻铸入星光，永不磨灭。</p>
+            `;
+            document.getElementById('detail-modal').classList.add('active');
+            controls.autoRotate = false;
+        }
+
+        function prevPhoto(e) {
+            if (e) e.stopPropagation();
+            let n = currentPhotoIndex - 1;
+            if (n < 0) n = photoCount - 1;
+            openDetail(n);
+        }
+
+        function nextPhoto(e) {
+            if (e) e.stopPropagation();
+            let n = currentPhotoIndex + 1;
+            if (n >= photoCount) n = 0;
+            openDetail(n);
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-modal').classList.remove('active');
+            controls.autoRotate = true;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            if (webglRenderer) webglRenderer.setSize(window.innerWidth, window.innerHeight);
+            if (cssRenderer) cssRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            TWEEN.update();
+            if (controls) controls.update();
+
+            if (particleSystem) particleSystem.rotation.y += 0.0003;
+            if (bgParticleSystem) bgParticleSystem.rotation.y += 0.0001;
+
+            // 流星天气引擎
+            const now = Date.now();
+
+            if (now > nextShowerTime && !meteorShowerMode) {
+                meteorShowerMode = true;
+                showerEndTime = now + random(12000, 18000);
+                nextShowerTime = now + random(18000, 25000);
+
+                const statusEl = document.getElementById('status-text');
+                statusEl.innerText = "✨ 警告：大规模流星雨正在席卷本记忆星系...";
+                statusEl.style.color = "#ff69b4";
+                statusEl.style.textShadow = "0 0 15px rgba(255,105,180,0.8)";
+
+                setTimeout(() => {
+                    statusEl.style.color = "#888";
+                    statusEl.style.textShadow = "none";
+                    statusEl.innerText = isRevealed ? "当前状态：照片已唤醒 | 鼠标悬浮发光 | 按 0 隐藏" : "当前状态：星系沉睡中 | 切换形态(1-5) | 按 0 唤醒照片";
+                }, 6000);
+            }
+
+            if (meteorShowerMode) {
+                if (now > showerEndTime) {
+                    meteorShowerMode = false;
+                } else if (Math.random() < 0.25) {
+                    const burstCount = Math.floor(random(4, 9));
+                    for (let k = 0; k < burstCount; k++) {
+                        meteors.push(new Meteor(webglScene));
+                    }
+                }
+            } else {
+                if (now > nextMeteorTime) {
+                    const singleCount = Math.floor(random(6, 12));
+                    for (let k = 0; k < singleCount; k++) {
+                        meteors.push(new Meteor(webglScene));
+                    }
+                    nextMeteorTime = now + random(2500, 5000);
+                }
+            }
+
+            meteors = meteors.filter(meteor => {
+                meteor.update();
+                return meteor.active;
+            });
+
+            if (webglRenderer && cssRenderer) {
+                webglRenderer.render(webglScene, camera);
+                cssRenderer.render(cssScene, camera);
+            }
+        }
+
+        let isMusicPlaying = false;
+        function toggleMusic() {
+            const bgMusic = document.getElementById('bg-music');
+            const musicBtn = document.getElementById('music-btn');
+            if (isMusicPlaying) {
+                bgMusic.pause();
+                musicBtn.classList.remove('playing');
+            } else {
+                bgMusic.play().catch(e => console.log("等待用户交互后激活音频播放", e));
+                musicBtn.classList.add('playing');
+            }
+            isMusicPlaying = !isMusicPlaying;
+        }
+
+        // === 回忆视频 ===
+        let wasMusicPlayingBeforeVideo = false;
+        function openVideo() {
+            const overlay = document.getElementById('video-overlay');
+            const video = document.getElementById('memory-video');
+            overlay.classList.add('active');
+            controls.autoRotate = false;
+
+            // 暂停背景音乐
+            const bgMusic = document.getElementById('bg-music');
+            wasMusicPlayingBeforeVideo = isMusicPlaying;
+            if (isMusicPlaying) {
+                bgMusic.pause();
+                document.getElementById('music-btn').classList.remove('playing');
+            }
+
+            video.currentTime = 0;
+            video.play().catch(e => console.log("视频自动播放需用户交互", e));
+        }
+        function closeVideo(e) {
+            if (e) e.stopPropagation();
+            const overlay = document.getElementById('video-overlay');
+            const video = document.getElementById('memory-video');
+            video.pause();
+            overlay.classList.remove('active');
+            controls.autoRotate = true;
+
+            // 恢复背景音乐
+            if (wasMusicPlayingBeforeVideo) {
+                const bgMusic = document.getElementById('bg-music');
+                bgMusic.play().catch(e => {});
+                document.getElementById('music-btn').classList.add('playing');
+            }
+        }
+        // 点击 overlay 空白区域也可关闭
+        document.getElementById('video-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeVideo();
+        });
+    </script>
+</body>
+</html>
